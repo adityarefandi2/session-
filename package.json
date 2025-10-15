@@ -1,16 +1,12 @@
 {
   "name": "wa-session",
   "version": "1.0.0",
-  "description": "WhatsApp bot anti hapus pesan",
   "main": "index.cjs",
   "scripts": {
     "start": "node index.cjs"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.7",
-    "pino": "^8.17.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "@whiskeysockets/baileys": "^6.6.0",
+    "pino": "^9.0.0"
   }
 }
