@@ -1,12 +1,12 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
-import Pino from 'pino'
-import { Boom } from '@hapi/boom'
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
+const Pino = require('pino')
+const { Boom } = require('@hapi/boom')
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info')
 
   const sock = makeWASocket({
-    printQRInTerminal: true, // sementara aktifkan biar kelihatan di log
+    printQRInTerminal: true, // aktifkan QR kalau sesi belum login
     auth: state,
     logger: Pino({ level: 'silent' }),
     browser: ['Chrome (Linux)', '', '']
@@ -29,20 +29,20 @@ async function startBot() {
     }
   })
 
-  // supaya Railway nggak langsung stop
-  process.stdin.resume()
-
-  // anti hapus pesan
-  sock.ev.on('messages.update', async (msgUpdate) => {
-    for (const m of msgUpdate) {
+  // Anti hapus pesan / media / stiker
+  sock.ev.on('messages.update', async (updates) => {
+    for (const m of updates) {
       if (m.update && m.update.message == null) {
-        const original = m.key.remoteJid
-        const sender = m.key.participant
-        console.log(`🛑 Pesan dihapus dari ${sender}`)
-        await sock.sendMessage('6282244877433@s.whatsapp.net', { text: `Pesan dihapus dari ${sender}` })
+        const sender = m.key.participant || m.key.remoteJid
+        await sock.sendMessage('6282244877433@s.whatsapp.net', {
+          text: `🛑 Pesan (media/stiker/teks) dihapus dari ${sender}`
+        })
       }
     }
   })
+
+  // supaya Railway gak auto-mati
+  process.stdin.resume()
 }
 
 startBot()
