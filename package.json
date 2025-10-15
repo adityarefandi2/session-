@@ -1,7 +1,10 @@
+
 {
   "name": "wa-session",
   "version": "1.0.0",
+  "description": "WhatsApp bot anti hapus pesan",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
