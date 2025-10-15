@@ -6,10 +6,10 @@ async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info')
 
   const sock = makeWASocket({
-    printQRInTerminal: true, // aktifkan QR kalau sesi belum login
+    printQRInTerminal: true,
     auth: state,
     logger: Pino({ level: 'silent' }),
-    browser: ['Chrome (Linux)', '', '']
+    browser: ['WhatsApp Web', 'Chrome', 'Linux']
   })
 
   sock.ev.on('creds.update', saveCreds)
@@ -17,15 +17,7 @@ async function startBot() {
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect } = update
     if (connection === 'close') {
-  console.log('⚠️ Koneksi terputus:', lastDisconnect?.error)
-  const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
-  if (reason !== DisconnectReason.loggedOut) {
-    console.log('🔁 Reconnecting...')
-    startBot()
-  } else {
-    console.log('❌ Logged out, please rescan QR')
-  }
-}
+      console.log('⚠️ Koneksi terputus:', lastDisconnect?.error)
       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
       if (reason !== DisconnectReason.loggedOut) {
         console.log('🔁 Reconnecting...')
@@ -38,7 +30,7 @@ async function startBot() {
     }
   })
 
-  // Anti hapus pesan / media / stiker
+  // Anti hapus pesan, media, stiker
   sock.ev.on('messages.update', async (updates) => {
     for (const m of updates) {
       if (m.update && m.update.message == null) {
@@ -50,7 +42,7 @@ async function startBot() {
     }
   })
 
-  // supaya Railway gak auto-mati
+  // Biar container Railway gak auto-mati
   process.stdin.resume()
 }
 
