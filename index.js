@@ -1,12 +1,13 @@
-import makeWASocket, {
+const {
+    default: makeWASocket,
     DisconnectReason,
     useMultiFileAuthState,
     fetchLatestBaileysVersion
-} from '@whiskeysockets/baileys'
-import pino from 'pino'
-import fs from 'fs'
+} = require('@whiskeysockets/baileys')
+const pino = require('pino')
+const fs = require('fs')
 
-// Nomor admin tujuan log
+// Nomor admin penerima log
 const admin = '6282244877433@s.whatsapp.net'
 
 async function startBot() {
@@ -22,7 +23,6 @@ async function startBot() {
         generateHighQualityLinkPreview: false,
     })
 
-    // Simpan sesi bila ada perubahan
     sock.ev.on('creds.update', saveCreds)
 
     // Abaikan telepon masuk
@@ -32,29 +32,30 @@ async function startBot() {
         }
     })
 
-    // Anti-hapus & anti-view once
+    // Anti-hapus & anti-view-once
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0]
         if (!msg.message) return
         if (msg.key.remoteJid === 'status@broadcast') return
         const from = msg.key.remoteJid
 
-        // Deteksi view once
+        // View once
         if (msg.message?.viewOnceMessage || msg.message?.viewOnceMessageV2) {
             await sock.sendMessage(admin, {
                 text: `📸 Pesan sekali lihat dari ${from}:\n\n${JSON.stringify(msg, null, 2)}`
             })
         }
 
-        // Deteksi pesan biasa (log)
+        // Log pesan masuk
         if (!msg.key.fromMe) {
+            const teks = msg.message.conversation || msg.message.extendedTextMessage?.text || '[Non-teks]'
             await sock.sendMessage(admin, {
-                text: `💬 Pesan masuk dari ${from}:\n\n${msg.pushName || 'Tanpa nama'}\n${msg.message.conversation || '[Non-teks]'}`,
+                text: `💬 Pesan dari ${from}\n${msg.pushName || 'Tanpa nama'}:\n${teks}`
             })
         }
     })
 
-    // Anti delete (pesan dihapus)
+    // Pesan dihapus
     sock.ev.on('messages.update', async updates => {
         for (let upd of updates) {
             if (upd.update.messageStubType === 1) {
