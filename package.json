@@ -2,11 +2,13 @@
   "name": "wa-session",
   "version": "1.0.0",
   "main": "index.cjs",
+  "type": "module",
   "scripts": {
     "start": "node index.cjs"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.6.0",
-    "pino": "^9.0.0"
+    "pino": "^9.0.0",
+    "@hapi/boom": "^10.0.0"
   }
 }
