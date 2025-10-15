@@ -70,7 +70,7 @@ async function startBot() {
   sock.ev.on("call", (call) => {
     console.log("📞 Call ignored from:", call.from);
   });
-
+process.stdin.resume()
   // Reconnect otomatis
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect } = update;
